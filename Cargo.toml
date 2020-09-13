@@ -8,8 +8,10 @@ edition = "2018"
 
 [dependencies]
 prost = "0.6"
+tonic = "0.3.1"
 # Only necessary if using Protobuf well-known types:
 prost-types = "0.6"
 
 [build-dependencies]
 prost-build = "0.6"
+tonic-build = "0.3.1"
