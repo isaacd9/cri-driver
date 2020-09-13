@@ -1,0 +1,3 @@
+[submodule "cri-api"]
+	path = cri-api
+	url = git@github.com:kubernetes/cri-api.git
