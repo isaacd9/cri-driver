@@ -14,6 +14,8 @@ prost-types = "0.6"
 tokio = { version = "0.2", features = ["rt-threaded", "time", "stream", "fs", "macros", "uds"] }
 log = "0.4"
 simple_logger = "1.9.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.8"
 
 [build-dependencies]
 prost-build = "0.6"
