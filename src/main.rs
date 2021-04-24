@@ -4,6 +4,7 @@ mod config;
 
 use crate::config::read_yaml_config;
 use rand::Rng;
+use runtime::image_service_client::ImageServiceClient;
 use runtime::runtime_service_client::RuntimeServiceClient;
 use runtime::runtime_service_server::RuntimeService;
 use runtime::*;
@@ -30,10 +31,7 @@ async fn get_and_print_version(
     Ok(())
 }
 
-async fn run_pod_sandbox(
-    pod_name: &String,
-    client: &mut RuntimeServiceClient<tonic::transport::Channel>,
-) -> Result<(std::String), Box<dyn std::error::Error>> {
+fn pod_sandbox_config(pod_name: &String) -> PodSandboxConfig {
     let mut security_context = LinuxSandboxSecurityContext::default();
 
     security_context.namespace_options = Some(NamespaceOption {
@@ -55,9 +53,15 @@ async fn run_pod_sandbox(
         security_context: Some(security_context),
         sysctls: HashMap::default(),
     });
+    pod_sandbox_config
+}
 
+async fn run_pod_sandbox(
+    pod_sandbox_config: &PodSandboxConfig,
+    client: &mut RuntimeServiceClient<tonic::transport::Channel>,
+) -> Result<String, Box<dyn std::error::Error>> {
     let request = RunPodSandboxRequest {
-        config: Some(pod_sandbox_config),
+        config: Some(pod_sandbox_config.clone()),
         runtime_handler: String::from(""),
     };
 
@@ -65,13 +69,68 @@ async fn run_pod_sandbox(
     let response = client.run_pod_sandbox(request).await?;
     let msg = response.into_inner();
     info!("peer responded {:?}", msg);
-    Ok(())
+    Ok((msg.pod_sandbox_id))
 }
 
 async fn create_containers(
     pod_sandbox_id: &String,
+    pod_sandbox_config: &PodSandboxConfig,
+    client: &mut RuntimeServiceClient<tonic::transport::Channel>,
+) -> Result<(String), Box<dyn std::error::Error>> {
+    let mut container_config = ContainerConfig::default();
+    container_config.metadata = Some(ContainerMetadata {
+        name: String::from("my-container"),
+        attempt: 0,
+    });
+    container_config.image = Some(ImageSpec {
+        image: String::from("hello-world"),
+        annotations: HashMap::default(),
+    });
+
+    let request = CreateContainerRequest {
+        pod_sandbox_id: pod_sandbox_id.clone(),
+        config: Some(container_config),
+        sandbox_config: Some(pod_sandbox_config.clone()),
+    };
+    info!("Creating container {:?}", request);
+    let response = client.create_container(request).await?;
+    let msg = response.into_inner();
+    info!("peer responded {:?}", msg);
+    Ok(msg.container_id)
+}
+
+async fn start_containers(
+    container_id: String,
     client: &mut RuntimeServiceClient<tonic::transport::Channel>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let request = StartContainerRequest {
+        container_id: container_id,
+    };
+    info!("Starting container {:?}", request);
+    let response = client.start_container(request).await?;
+    let msg = response.into_inner();
+    info!("peer responded {:?}", msg);
+    Ok(())
+}
+
+async fn pull_image(
+    pod_sandbox_config: &PodSandboxConfig,
+    client: &mut ImageServiceClient<tonic::transport::Channel>,
+) -> Result<(String), Box<dyn std::error::Error>> {
+    let request = PullImageRequest {
+        image: Some(ImageSpec {
+            image: String::from("hello-world"),
+            annotations: HashMap::default(),
+        }),
+        auth: None,
+        sandbox_config: Some(pod_sandbox_config.clone()),
+    };
+
+    info!("Pulling image {:?}", request);
+    let response = client.pull_image(request).await?;
+    let msg = response.into_inner();
+    info!("peer responded {:?}", msg);
+    Ok((msg.image_ref))
 }
 
 const ADDR: &'static str = "http://localhost:3000";
@@ -83,14 +142,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init()
         .unwrap();
 
-    let mut client = RuntimeServiceClient::connect(ADDR).await?;
-    get_and_print_version(&mut client).await?;
+    let mut runtime_service_client = RuntimeServiceClient::connect(ADDR).await?;
+    let mut image_service_client = ImageServiceClient::connect(ADDR).await?;
+    get_and_print_version(&mut runtime_service_client).await?;
 
     let mut rng = rand::thread_rng();
     let name = format!("my-test-pod-{}", rng.gen::<u128>());
     let stdin = std::io::stdin();
     //let config = read_yaml_config(stdin);
     //println!("{:?}", config);
-    run_pod_sandbox(&name, &mut client).await?;
+
+    let pod_sandbox_config = pod_sandbox_config(&name);
+    let pod_sandbox_id = run_pod_sandbox(&pod_sandbox_config, &mut runtime_service_client).await?;
+    let image_ref = pull_image(&pod_sandbox_config, &mut image_service_client).await?;
+    let container = create_containers(
+        &pod_sandbox_id,
+        &pod_sandbox_config,
+        &mut runtime_service_client,
+    )
+    .await?;
+
+    start_containers(container, &mut runtime_service_client).await?;
+
     Ok(())
 }
