@@ -72,6 +72,7 @@ async fn run_pod_sandbox(
 }
 
 async fn create_containers(
+    image_id: &String,
     pod_sandbox_id: &String,
     pod_sandbox_config: &PodSandboxConfig,
     client: &mut RuntimeServiceClient<tonic::transport::Channel>,
@@ -82,7 +83,7 @@ async fn create_containers(
         attempt: 0,
     });
     container_config.image = Some(ImageSpec {
-        image: String::from("hello-world"),
+        image: image_id.clone(),
         annotations: HashMap::default(),
     });
 
@@ -165,12 +166,13 @@ async fn destroy_pod(
 }
 
 async fn pull_image(
+    image_id: &String,
     pod_sandbox_config: &PodSandboxConfig,
     client: &mut ImageServiceClient<tonic::transport::Channel>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let request = PullImageRequest {
         image: Some(ImageSpec {
-            image: String::from("hello-world"),
+            image: image_id.clone(),
             annotations: HashMap::default(),
         }),
         auth: None,
@@ -185,6 +187,7 @@ async fn pull_image(
 }
 
 const ADDR: &'static str = "http://localhost:3000";
+const IMAGE: &'static str = "hello-world";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -205,8 +208,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let pod_sandbox_config = pod_sandbox_config(&name);
     let pod_sandbox_id = run_pod_sandbox(&pod_sandbox_config, &mut runtime_service_client).await?;
-    let image_ref = pull_image(&pod_sandbox_config, &mut image_service_client).await?;
+    let image_ref = pull_image(
+        &IMAGE.to_string(),
+        &pod_sandbox_config,
+        &mut image_service_client,
+    )
+    .await?;
     let container = create_containers(
+        &IMAGE.to_string(),
         &pod_sandbox_id,
         &pod_sandbox_config,
         &mut runtime_service_client,
