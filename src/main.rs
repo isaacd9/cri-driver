@@ -100,11 +100,11 @@ async fn create_containers(
 }
 
 async fn start_containers(
-    container_id: String,
+    container_id: &String,
     client: &mut RuntimeServiceClient<tonic::transport::Channel>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request = StartContainerRequest {
-        container_id: container_id,
+        container_id: container_id.clone(),
     };
     info!("Starting container {:?}", request);
     let response = client.start_container(request).await?;
@@ -162,7 +162,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
 
-    start_containers(container, &mut runtime_service_client).await?;
+    start_containers(&container, &mut runtime_service_client).await?;
 
+    loop {
+        let res = runtime_service_client
+            .container_status(ContainerStatusRequest {
+                container_id: container.clone(),
+                verbose: true,
+            })
+            .await?;
+        let msg = res.into_inner();
+        info!("{:?}", msg);
+        if let Some(status) = msg.status {
+            match ContainerState::from_i32(status.state) {
+                Some(ContainerState::ContainerExited) => break,
+                _ => (),
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+    }
+
+    info!("container exited");
     Ok(())
 }
