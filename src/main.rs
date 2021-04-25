@@ -112,6 +112,58 @@ async fn start_containers(
     Ok(())
 }
 
+async fn poll_container_status(
+    container_id: &String,
+    client: &mut RuntimeServiceClient<tonic::transport::Channel>,
+) -> Result<ContainerState, Box<dyn std::error::Error>> {
+    let res = client
+        .container_status(ContainerStatusRequest {
+            container_id: container_id.clone(),
+            verbose: true,
+        })
+        .await?;
+    let msg = res.into_inner();
+    info!("{:?}", msg);
+
+    if let Some(status) = msg.status {
+        if let Some(state) = ContainerState::from_i32(status.state) {
+            return Ok(state);
+        }
+    }
+
+    Ok(ContainerState::ContainerUnknown)
+}
+
+async fn stop_pod(
+    pod_sandbox_id: &String,
+    client: &mut RuntimeServiceClient<tonic::transport::Channel>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let res = client
+        .stop_pod_sandbox(StopPodSandboxRequest {
+            pod_sandbox_id: pod_sandbox_id.clone(),
+        })
+        .await?;
+    let msg = res.into_inner();
+    info!("{:?}", msg);
+
+    Ok(())
+}
+
+async fn destroy_pod(
+    pod_sandbox_id: &String,
+    client: &mut RuntimeServiceClient<tonic::transport::Channel>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let res = client
+        .remove_pod_sandbox(RemovePodSandboxRequest {
+            pod_sandbox_id: pod_sandbox_id.clone(),
+        })
+        .await?;
+    let msg = res.into_inner();
+    info!("{:?}", msg);
+
+    Ok(())
+}
+
 async fn pull_image(
     pod_sandbox_config: &PodSandboxConfig,
     client: &mut ImageServiceClient<tonic::transport::Channel>,
@@ -164,24 +216,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     start_containers(&container, &mut runtime_service_client).await?;
 
     loop {
-        let res = runtime_service_client
-            .container_status(ContainerStatusRequest {
-                container_id: container.clone(),
-                verbose: true,
-            })
-            .await?;
-        let msg = res.into_inner();
-        info!("{:?}", msg);
-        if let Some(status) = msg.status {
-            match ContainerState::from_i32(status.state) {
-                Some(ContainerState::ContainerExited) => break,
-                _ => (),
-            }
+        let status = poll_container_status(&container, &mut runtime_service_client).await?;
+        match status {
+            ContainerState::ContainerExited => break,
+            _ => (),
         }
         std::thread::sleep(std::time::Duration::from_millis(1000));
     }
 
     info!("container exited");
-    // TODO: Remove pod
+    stop_pod(&pod_sandbox_id, &mut runtime_service_client).await?;
+    destroy_pod(&pod_sandbox_id, &mut runtime_service_client).await?;
+
+    info!("cleaned up");
     Ok(())
 }
