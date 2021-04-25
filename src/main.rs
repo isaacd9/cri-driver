@@ -30,7 +30,7 @@ async fn get_and_print_version(
     Ok(())
 }
 
-fn pod_sandbox_config(pod_name: &String) -> PodSandboxConfig {
+fn pod_sandbox_config(uid: &String) -> PodSandboxConfig {
     let mut security_context = LinuxSandboxSecurityContext::default();
 
     security_context.namespace_options = Some(NamespaceOption {
@@ -42,8 +42,8 @@ fn pod_sandbox_config(pod_name: &String) -> PodSandboxConfig {
 
     let mut pod_sandbox_config = PodSandboxConfig::default();
     pod_sandbox_config.metadata = Some(PodSandboxMetadata {
-        name: pod_name.clone(),
-        uid: String::from("my user"),
+        name: String::from("a nice pod"),
+        uid: uid.clone(),
         namespace: String::from("my-test-name-namespace"),
         attempt: 0,
     });
@@ -201,12 +201,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     get_and_print_version(&mut runtime_service_client).await?;
 
     let mut rng = rand::thread_rng();
-    let name = format!("my-test-pod-{}", rng.gen::<u128>());
+    let uid = format!("my-test-pod-{}", rng.gen::<u128>());
     let stdin = std::io::stdin();
     //let config = read_yaml_config(stdin);
     //println!("{:?}", config);
 
-    let pod_sandbox_config = pod_sandbox_config(&name);
+    let pod_sandbox_config = pod_sandbox_config(&uid);
     let pod_sandbox_id = run_pod_sandbox(&pod_sandbox_config, &mut runtime_service_client).await?;
     let image_ref = pull_image(
         &IMAGE.to_string(),
