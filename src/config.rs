@@ -1,10 +1,8 @@
-use serde_yaml::{Result, Value};
+use serde_yaml::Result;
 
 use std::io::Read;
-use types::*;
 
 pub mod types {
-    use serde;
     include!(concat!(env!("OUT_DIR"), "/types.rs"));
 }
 

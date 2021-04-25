@@ -6,7 +6,6 @@ use crate::config::read_yaml_config;
 use rand::Rng;
 use runtime::image_service_client::ImageServiceClient;
 use runtime::runtime_service_client::RuntimeServiceClient;
-use runtime::runtime_service_server::RuntimeService;
 use runtime::*;
 use std::collections::HashMap;
 
@@ -69,14 +68,14 @@ async fn run_pod_sandbox(
     let response = client.run_pod_sandbox(request).await?;
     let msg = response.into_inner();
     info!("peer responded {:?}", msg);
-    Ok((msg.pod_sandbox_id))
+    Ok(msg.pod_sandbox_id)
 }
 
 async fn create_containers(
     pod_sandbox_id: &String,
     pod_sandbox_config: &PodSandboxConfig,
     client: &mut RuntimeServiceClient<tonic::transport::Channel>,
-) -> Result<(String), Box<dyn std::error::Error>> {
+) -> Result<String, Box<dyn std::error::Error>> {
     let mut container_config = ContainerConfig::default();
     container_config.metadata = Some(ContainerMetadata {
         name: String::from("my-container"),
@@ -116,7 +115,7 @@ async fn start_containers(
 async fn pull_image(
     pod_sandbox_config: &PodSandboxConfig,
     client: &mut ImageServiceClient<tonic::transport::Channel>,
-) -> Result<(String), Box<dyn std::error::Error>> {
+) -> Result<String, Box<dyn std::error::Error>> {
     let request = PullImageRequest {
         image: Some(ImageSpec {
             image: String::from("hello-world"),
@@ -130,7 +129,7 @@ async fn pull_image(
     let response = client.pull_image(request).await?;
     let msg = response.into_inner();
     info!("peer responded {:?}", msg);
-    Ok((msg.image_ref))
+    Ok(msg.image_ref)
 }
 
 const ADDR: &'static str = "http://localhost:3000";
