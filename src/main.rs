@@ -183,5 +183,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     info!("container exited");
+    // TODO: Remove pod
     Ok(())
 }
