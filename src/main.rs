@@ -8,6 +8,7 @@ use runtime::image_service_client::ImageServiceClient;
 use runtime::runtime_service_client::RuntimeServiceClient;
 use runtime::*;
 use std::collections::HashMap;
+use std::io;
 
 pub mod runtime {
     include!(concat!(env!("OUT_DIR"), "/runtime.v1alpha2.rs"));
@@ -30,7 +31,26 @@ async fn get_and_print_version(
     Ok(())
 }
 
-fn pod_sandbox_config(uid: &String) -> PodSandboxConfig {
+async fn pod_exists(
+    name: &String,
+    client: &mut RuntimeServiceClient<tonic::transport::Channel>,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let request = ListPodSandboxRequest::default();
+
+    info!("Getting sandbox status {:?}", request);
+    let response = client.list_pod_sandbox(request).await?;
+    let msg = response.into_inner();
+    info!("peer responded {:?}", msg);
+    let exists = msg.items.into_iter().any(|pod_sandbox| {
+        pod_sandbox
+            .metadata
+            .filter(|metadata| metadata.name == *name)
+            .is_some()
+    });
+    Ok(exists)
+}
+
+fn pod_sandbox_config(name: &String, uid: &String) -> PodSandboxConfig {
     let mut security_context = LinuxSandboxSecurityContext::default();
 
     security_context.namespace_options = Some(NamespaceOption {
@@ -42,7 +62,7 @@ fn pod_sandbox_config(uid: &String) -> PodSandboxConfig {
 
     let mut pod_sandbox_config = PodSandboxConfig::default();
     pod_sandbox_config.metadata = Some(PodSandboxMetadata {
-        name: String::from("a nice pod"),
+        name: String::from(name),
         uid: uid.clone(),
         namespace: String::from("my-test-name-namespace"),
         attempt: 0,
@@ -188,6 +208,7 @@ async fn pull_image(
 
 const ADDR: &'static str = "http://localhost:3000";
 const IMAGE: &'static str = "hello-world";
+const NAME: &'static str = "a nice pod 2";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -200,13 +221,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut image_service_client = ImageServiceClient::connect(ADDR).await?;
     get_and_print_version(&mut runtime_service_client).await?;
 
+    if pod_exists(&String::from(NAME), &mut runtime_service_client).await? {
+        let e = format!("the pod \"{}\" already exists", &String::from(NAME));
+        return Err(e.into());
+    }
+
     let mut rng = rand::thread_rng();
     let uid = format!("my-test-pod-{}", rng.gen::<u128>());
     let stdin = std::io::stdin();
     //let config = read_yaml_config(stdin);
     //println!("{:?}", config);
 
-    let pod_sandbox_config = pod_sandbox_config(&uid);
+    let pod_sandbox_config = pod_sandbox_config(&String::from(NAME), &uid);
     let pod_sandbox_id = run_pod_sandbox(&pod_sandbox_config, &mut runtime_service_client).await?;
     let image_ref = pull_image(
         &IMAGE.to_string(),
