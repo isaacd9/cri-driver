@@ -8,7 +8,6 @@ use runtime::image_service_client::ImageServiceClient;
 use runtime::runtime_service_client::RuntimeServiceClient;
 use runtime::*;
 use std::collections::HashMap;
-use std::io;
 
 pub mod runtime {
     include!(concat!(env!("OUT_DIR"), "/runtime.v1alpha2.rs"));
@@ -207,7 +206,7 @@ async fn pull_image(
 }
 
 const ADDR: &'static str = "http://localhost:3000";
-const IMAGE: &'static str = "hello-world";
+const IMAGE: &'static str = "gcr.io/google_containers/pause-amd64:3.0";
 const NAME: &'static str = "a nice pod 2";
 
 #[tokio::main]
@@ -227,7 +226,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut rng = rand::thread_rng();
-    let uid = format!("my-test-pod-{}", rng.gen::<u128>());
+    let uid = format!("{}-{}", NAME, rng.gen::<u128>());
     let stdin = std::io::stdin();
     //let config = read_yaml_config(stdin);
     //println!("{:?}", config);
