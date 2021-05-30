@@ -10,5 +10,6 @@ message Container {
 }
 
 message Pod {
-  repeated Container containers = 1;
+  string name = 1;
+  repeated Container containers = 2;
 }

@@ -7,7 +7,11 @@ use rand::Rng;
 use runtime::image_service_client::ImageServiceClient;
 use runtime::runtime_service_client::RuntimeServiceClient;
 use runtime::*;
+use signal_hook::consts::signal::*;
+use signal_hook::flag as signal_flag;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 pub mod runtime {
     include!(concat!(env!("OUT_DIR"), "/runtime.v1alpha2.rs"));
@@ -216,6 +220,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init()
         .unwrap();
 
+    let term = Arc::new(AtomicUsize::new(0));
+    const SIGTERM_U: usize = SIGTERM as usize;
+    const SIGINT_U: usize = SIGINT as usize;
+    const SIGQUIT_U: usize = SIGQUIT as usize;
+    signal_flag::register_usize(SIGTERM, Arc::clone(&term), SIGTERM_U)?;
+    signal_flag::register_usize(SIGINT, Arc::clone(&term), SIGINT_U)?;
+    signal_flag::register_usize(SIGQUIT, Arc::clone(&term), SIGQUIT_U)?;
+
     let mut runtime_service_client = RuntimeServiceClient::connect(ADDR).await?;
     let mut image_service_client = ImageServiceClient::connect(ADDR).await?;
     get_and_print_version(&mut runtime_service_client).await?;
@@ -250,15 +262,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     start_containers(&container, &mut runtime_service_client).await?;
 
     loop {
-        let status = poll_container_status(&container, &mut runtime_service_client).await?;
-        match status {
-            ContainerState::ContainerExited => break,
-            _ => (),
+        match term.load(Ordering::Relaxed) {
+            0 => {
+                let status = poll_container_status(&container, &mut runtime_service_client).await?;
+                match status {
+                    ContainerState::ContainerExited => {
+                        info!("container exited");
+                        break;
+                    }
+                    _ => (),
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+            }
+            SIGTERM_U => {
+                warn!("Terminating on the TERM signal");
+                break;
+            }
+            SIGINT_U => {
+                warn!("Terminating on the INT signal");
+                break;
+            }
+            SIGQUIT_U => {
+                warn!("Terminating on the QUIT signal");
+                break;
+            }
+            _ => unreachable!(),
         }
-        std::thread::sleep(std::time::Duration::from_millis(1000));
     }
 
-    info!("container exited");
+    info!("cleaning up");
     stop_pod(&pod_sandbox_id, &mut runtime_service_client).await?;
     destroy_pod(&pod_sandbox_id, &mut runtime_service_client).await?;
 
