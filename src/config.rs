@@ -8,10 +8,7 @@ pub mod types {
 
 use types::Pod;
 
-pub fn read_yaml_config<R>(reader: R) -> Result<Pod>
-where
-    R: Read,
-{
+pub fn read_yaml_config<R: Read>(reader: R) -> Result<Pod> {
     serde_yaml::from_reader::<R, Pod>(reader)
 }
 

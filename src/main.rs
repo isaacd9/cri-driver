@@ -2,7 +2,7 @@
 extern crate log;
 mod config;
 
-use crate::config::read_yaml_config;
+use crate::config::*;
 use rand::Rng;
 use runtime::image_service_client::ImageServiceClient;
 use runtime::runtime_service_client::RuntimeServiceClient;
@@ -10,12 +10,20 @@ use runtime::*;
 use signal_hook::consts::signal::*;
 use signal_hook::flag as signal_flag;
 use std::collections::HashMap;
+use std::env;
+use std::fs::File;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 pub mod runtime {
     include!(concat!(env!("OUT_DIR"), "/runtime.v1alpha2.rs"));
 }
+
+const ADDR: &'static str = "http://localhost:3000";
+const IMAGE: &'static str = "gcr.io/google_containers/pause-amd64:3.0";
+const NAME: &'static str = "a nice pod 2";
+const NAMESPACE: &'static str = "my-test-name-namespace";
+const CONTAINER_NAME: &'static str = "test-container";
 
 struct PodManager {
     runtime_service_client: RuntimeServiceClient<tonic::transport::Channel>,
@@ -71,7 +79,7 @@ impl PodManager {
         pod_sandbox_config.metadata = Some(PodSandboxMetadata {
             name: String::from(name),
             uid: uid.clone(),
-            namespace: String::from("my-test-name-namespace"),
+            namespace: String::from(NAMESPACE),
             attempt: 0,
         });
         pod_sandbox_config.linux = Some(LinuxPodSandboxConfig {
@@ -98,15 +106,16 @@ impl PodManager {
         Ok(msg.pod_sandbox_id)
     }
 
-    async fn create_containers(
+    async fn create_container(
         &mut self,
         image_id: &String,
+        container_name: &String,
         pod_sandbox_id: &String,
         pod_sandbox_config: &PodSandboxConfig,
     ) -> Result<String, Box<dyn std::error::Error>> {
         let mut container_config = ContainerConfig::default();
         container_config.metadata = Some(ContainerMetadata {
-            name: String::from("my-container"),
+            name: String::from(container_name),
             attempt: 0,
         });
         container_config.image = Some(ImageSpec {
@@ -129,7 +138,7 @@ impl PodManager {
         Ok(msg.container_id)
     }
 
-    async fn start_containers(
+    async fn start_container(
         &mut self,
         container_id: &String,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -220,16 +229,17 @@ impl PodManager {
     }
 }
 
-const ADDR: &'static str = "http://localhost:3000";
-const IMAGE: &'static str = "gcr.io/google_containers/pause-amd64:3.0";
-const NAME: &'static str = "a nice pod 2";
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config_file = env::args().nth(1).unwrap();
+    let pod = read_yaml_config(File::open(config_file)?);
+
     simple_logger::SimpleLogger::new()
         .with_level(log::LevelFilter::Info)
         .init()
         .unwrap();
+
+    info!("pod: {:?}", pod);
 
     let term = Arc::new(AtomicUsize::new(0));
     const SIGTERM_U: usize = SIGTERM as usize;
@@ -256,7 +266,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut rng = rand::thread_rng();
     let uid = format!("{}-{}", NAME, rng.gen::<u128>());
-    let stdin = std::io::stdin();
     //let config = read_yaml_config(stdin);
     //println!("{:?}", config);
 
@@ -266,10 +275,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .pull_image(&IMAGE.to_string(), &pod_sandbox_config)
         .await?;
     let container = m
-        .create_containers(&IMAGE.to_string(), &pod_sandbox_id, &pod_sandbox_config)
+        .create_container(
+            &IMAGE.to_string(),
+            &CONTAINER_NAME.to_string(),
+            &pod_sandbox_id,
+            &pod_sandbox_config,
+        )
         .await?;
 
-    m.start_containers(&container).await?;
+    m.start_container(&container).await?;
 
     loop {
         match term.load(Ordering::Relaxed) {
