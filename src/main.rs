@@ -22,7 +22,6 @@ pub mod runtime {
 const ADDR: &'static str = "http://localhost:3000";
 const IMAGE: &'static str = "gcr.io/google_containers/pause-amd64:3.0";
 const NAME: &'static str = "a nice pod 2";
-const NAMESPACE: &'static str = "my-test-name-namespace";
 const CONTAINER_NAME: &'static str = "test-container";
 
 struct PodManager {
@@ -77,9 +76,9 @@ impl PodManager {
 
         let mut pod_sandbox_config = PodSandboxConfig::default();
         pod_sandbox_config.metadata = Some(PodSandboxMetadata {
-            name: String::from(name),
+            name: name.clone(),
             uid: uid.clone(),
-            namespace: String::from(NAMESPACE),
+            namespace: name.clone(),
             attempt: 0,
         });
         pod_sandbox_config.linux = Some(LinuxPodSandboxConfig {
