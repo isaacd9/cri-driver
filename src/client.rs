@@ -10,7 +10,7 @@ pub mod runtime {
 }
 
 pub struct CRIClient {
-    addr: tonic::transport::Endpoint,
+    addr: tonic::transport::Uri,
     runtime_service_client: RuntimeServiceClient<tonic::transport::Channel>,
     image_service_client: ImageServiceClient<tonic::transport::Channel>,
 }
@@ -18,15 +18,15 @@ pub struct CRIClient {
 impl CRIClient {
     pub async fn connect<D>(dst: D) -> Result<Self, Box<dyn std::error::Error>>
     where
-        D: std::convert::TryInto<tonic::transport::Endpoint>,
-        D::Error: std::error::Error + Send + Sync + 'static,
+        D: std::convert::TryInto<tonic::transport::Uri>,
+        D::Error: std::error::Error + 'static,
     {
-        let endpoint: tonic::transport::Endpoint = dst.try_into()?;
-        let runtime_service_client = RuntimeServiceClient::connect(endpoint.clone()).await?;
-        let image_service_client = ImageServiceClient::connect(endpoint.clone()).await?;
+        let uri: tonic::transport::Uri = dst.try_into()?;
+        let runtime_service_client = RuntimeServiceClient::connect(uri.clone()).await?;
+        let image_service_client = ImageServiceClient::connect(uri.clone()).await?;
 
         Ok(Self {
-            addr: endpoint,
+            addr: uri,
             runtime_service_client: runtime_service_client,
             image_service_client: image_service_client,
         })
