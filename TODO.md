@@ -1,5 +1,14 @@
 Rough priority order
-[] handle parent process termination. bad if we exit and don't clean up the child containers we've launched
-[] actually use a config file
-[] support multiple containers
-[] SIGHUP to restart container
+- [x] handle parent process termination. bad if we exit and don't clean up the child containers we've launched
+- [x] actually use a config file
+- [x] support multiple containers
+- [ ] handle port other than 3000 and unix sockets
+- [ ] Validate config
+- [ ] Clean up logging
+- [ ] Time out connection failure
+- [ ] Robustify config
+  - [ ] Support mounts
+  - [ ] Support some simple network config
+- [ ] Refactor code away from main function
+- [ ] Image pull policies
+- [ ] SIGHUP to restart container
