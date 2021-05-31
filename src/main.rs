@@ -105,13 +105,15 @@ impl PodManager {
     async fn create_container(
         &mut self,
         image_id: &String,
-        container_name: &String,
+        ctr: &types::Container,
         pod_sandbox_id: &String,
         pod_sandbox_config: &PodSandboxConfig,
     ) -> Result<String, Box<dyn std::error::Error>> {
         let mut container_config = ContainerConfig::default();
+        container_config.args = ctr.args.clone();
+        container_config.command = vec![ctr.command.clone()];
         container_config.metadata = Some(ContainerMetadata {
-            name: String::from(container_name),
+            name: ctr.name.clone(),
             attempt: 0,
         });
         container_config.image = Some(ImageSpec {
@@ -275,8 +277,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let container_id = m
             .create_container(
                 // TODO: see if we can replace with image_ref
-                &container.image,
-                &container.name,
+                &image_ref,
+                &container,
                 &pod_sandbox_id,
                 &pod_sandbox_config,
             )
