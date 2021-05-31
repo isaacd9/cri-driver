@@ -1,3 +1,4 @@
+name: "my first pod"
 containers:
   - name: "hello world"
     image: "hello-world"
