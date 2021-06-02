@@ -4,7 +4,7 @@ Rough priority order
 - [x] support multiple containers
 - [ ] handle port other than 3000 and unix sockets
 - [ ] Validate config
-- [ ] Clean up logging
+- [x] Clean up logging
 - [ ] Time out connection failure
 - [ ] Robustify config
   - [ ] Support mounts
@@ -12,3 +12,4 @@ Rough priority order
 - [ ] Refactor code away from main function
 - [ ] Image pull policies
 - [ ] SIGHUP to restart container
+- [ ] Cache images

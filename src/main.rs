@@ -9,7 +9,6 @@ use crate::config::*;
 use rand::Rng;
 use signal_hook::consts::signal::*;
 use signal_hook::flag as signal_flag;
-use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -37,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     signal_flag::register_usize(SIGINT, Arc::clone(&term), SIGINT_U)?;
     signal_flag::register_usize(SIGQUIT, Arc::clone(&term), SIGQUIT_U)?;
 
-    let mut m = client::CRIClient::connect(ADDR).await?;
+    let mut m = CRIClient::connect(ADDR).await?;
     m.get_and_print_version().await?;
 
     if m.pod_exists(&pod.name).await? {

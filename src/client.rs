@@ -50,13 +50,13 @@ impl CRIClient {
     pub async fn pod_exists(&mut self, name: &String) -> Result<bool, Box<dyn std::error::Error>> {
         let request = ListPodSandboxRequest::default();
 
-        info!("Getting sandbox status {:?}", request);
+        debug!("Getting sandbox status {:?}", request);
         let response = self
             .runtime_service_client
             .list_pod_sandbox(request)
             .await?;
         let msg = response.into_inner();
-        info!("peer responded {:?}", msg);
+        debug!("peer responded {:?}", msg);
         let exists = msg.items.into_iter().any(|pod_sandbox| {
             pod_sandbox
                 .metadata
@@ -100,10 +100,15 @@ impl CRIClient {
             runtime_handler: String::from(""),
         };
 
-        info!("Creating pod sandbox {:?}", request);
+        debug!("Creating pod sandbox {:?}", request);
         let response = self.runtime_service_client.run_pod_sandbox(request).await?;
         let msg = response.into_inner();
-        info!("peer responded {:?}", msg);
+        info!(
+            "Created pod sandbox {}: {}",
+            pod_sandbox_config.metadata.as_ref().unwrap().name,
+            msg.pod_sandbox_id,
+        );
+        debug!("peer responded {:?}", msg);
         Ok(msg.pod_sandbox_id)
     }
 
@@ -115,8 +120,12 @@ impl CRIClient {
         pod_sandbox_config: &PodSandboxConfig,
     ) -> Result<String, Box<dyn std::error::Error>> {
         let mut container_config = ContainerConfig::default();
-        container_config.args = ctr.args.clone();
-        container_config.command = vec![ctr.command.clone()];
+        if ctr.args.len() > 0 {
+            container_config.args = ctr.args.clone();
+        }
+        if ctr.command != "" {
+            container_config.command = vec![ctr.command.clone()];
+        }
         container_config.metadata = Some(ContainerMetadata {
             name: ctr.name.clone(),
             attempt: 0,
@@ -131,13 +140,17 @@ impl CRIClient {
             config: Some(container_config),
             sandbox_config: Some(pod_sandbox_config.clone()),
         };
-        info!("Creating container {:?}", request);
+        debug!("Creating container {:?}", request);
         let response = self
             .runtime_service_client
             .create_container(request)
             .await?;
         let msg = response.into_inner();
-        info!("peer responded {:?}", msg);
+        debug!("peer responded {:?}", msg);
+        info!(
+            "Created container {} [{}]: {}",
+            ctr.name, image_id, msg.container_id,
+        );
         Ok(msg.container_id)
     }
 
@@ -148,10 +161,11 @@ impl CRIClient {
         let request = StartContainerRequest {
             container_id: container_id.clone(),
         };
-        info!("Starting container {:?}", request);
+        info!("Starting container {}", container_id);
+        debug!("Starting container {:?}", request);
         let response = self.runtime_service_client.start_container(request).await?;
         let msg = response.into_inner();
-        info!("peer responded {:?}", msg);
+        debug!("peer responded {:?}", msg);
         Ok(())
     }
 
@@ -167,7 +181,7 @@ impl CRIClient {
             })
             .await?;
         let msg = res.into_inner();
-        info!("{:?}", msg);
+        debug!("{:?}", msg);
 
         if let Some(status) = msg.status {
             if let Some(state) = ContainerState::from_i32(status.state) {
@@ -198,14 +212,14 @@ impl CRIClient {
         &mut self,
         pod_sandbox_id: &String,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let res = self
-            .runtime_service_client
-            .remove_pod_sandbox(RemovePodSandboxRequest {
-                pod_sandbox_id: pod_sandbox_id.clone(),
-            })
-            .await?;
+        let req = RemovePodSandboxRequest {
+            pod_sandbox_id: pod_sandbox_id.clone(),
+        };
+        info!("Destroying pod {}", pod_sandbox_id);
+        debug!("Destroying pod {:?}", req);
+        let res = self.runtime_service_client.remove_pod_sandbox(req).await?;
         let msg = res.into_inner();
-        info!("{:?}", msg);
+        debug!("peer responded {:?}", msg);
 
         Ok(())
     }
@@ -224,10 +238,11 @@ impl CRIClient {
             sandbox_config: Some(pod_sandbox_config.clone()),
         };
 
-        info!("Pulling image {:?}", request);
+        info!("Pulling image {}", image_id);
+        debug!("Pulling image {:?}", request);
         let response = self.image_service_client.pull_image(request).await?;
         let msg = response.into_inner();
-        info!("peer responded {:?}", msg);
+        debug!("peer responded {:?}", msg);
         Ok(msg.image_ref)
     }
 }

@@ -1,17 +1,4 @@
-name: "my first pod"
+name: "a redis pod"
 containers:
-  - name: "hello world"
-    image: "ubuntu"
-    command: echo
-    args:
-      - "hello world"
-  - name: "bang"
-    image: "ubuntu"
-    command: echo
-    args:
-      - "bang"
-  - name: "whimper"
-    image: "ubuntu"
-    command: echo
-    args:
-      - "whimper"
+  - name: "redis"
+    image: "redis"
