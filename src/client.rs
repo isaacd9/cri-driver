@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::{Error, ErrorKind};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use runtime::image_service_client::ImageServiceClient;
@@ -172,7 +173,7 @@ impl CRIClient {
     pub async fn poll_container_status(
         &mut self,
         container_id: &String,
-    ) -> Result<ContainerState, Box<dyn std::error::Error>> {
+    ) -> Result<ContainerStatus, Box<dyn std::error::Error>> {
         let res = self
             .runtime_service_client
             .container_status(ContainerStatusRequest {
@@ -183,13 +184,13 @@ impl CRIClient {
         let msg = res.into_inner();
         debug!("{:?}", msg);
 
-        if let Some(status) = msg.status {
-            if let Some(state) = ContainerState::from_i32(status.state) {
-                return Ok(state);
-            }
+        match msg.status {
+            Some(status) => Ok(status),
+            None => Err(Box::new(Error::new(
+                std::io::ErrorKind::NotFound,
+                "could not find container status",
+            ))),
         }
-
-        Ok(ContainerState::ContainerUnknown)
     }
 
     pub async fn stop_pod(

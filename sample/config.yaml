@@ -1,4 +1,4 @@
-name: "a redis pod"
+name: "a nice pod 3"
 containers:
-  - name: "redis"
-    image: "redis"
+  - name: "hello world"
+    image: "hello-world"

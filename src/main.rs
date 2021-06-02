@@ -5,6 +5,7 @@ mod config;
 
 use crate::client::*;
 use crate::config::*;
+use client::runtime::ContainerState;
 
 use rand::Rng;
 use signal_hook::consts::signal::*;
@@ -76,12 +77,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match term.load(Ordering::Relaxed) {
             0 => {
                 for container_id in &container_ids {
-                    match m.poll_container_status(&container_id).await? {
-                        client::runtime::ContainerState::ContainerExited => {
-                            info!("container exited");
-                            break 'outer;
-                        }
-                        _ => (),
+                    match m.poll_container_status(&container_id).await {
+                        Err(e) => warn!("could not fetch container state {:?}", e),
+                        Ok(status) => match ContainerState::from_i32(status.state) {
+                            Some(ContainerState::ContainerExited) => {
+                                warn!("Detected that container exited, exiting");
+                                break 'outer;
+                            }
+                            Some(ContainerState::ContainerUnknown) => {
+                                warn!("Container is in unknown state, exiting");
+                                break 'outer;
+                            }
+                            _ => {}
+                        },
                     }
                 }
                 std::thread::sleep(std::time::Duration::from_millis(1000));
